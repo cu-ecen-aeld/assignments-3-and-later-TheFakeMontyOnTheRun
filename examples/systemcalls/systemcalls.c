@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
-
+#include <sys/wait.h>
 /**
  * @param cmd the command to execute with system()
  * @return true if the command in @param cmd was executed
@@ -44,12 +44,15 @@ bool do_exec(int count, ...)
     command[count] = NULL;
 
 
-
-    if (!fork()) {
+    int pid = fork();
+    if (!pid) {
 
       int status = execv(command[0], command + 1);
 
       return status != -1;
+    } else {
+      int status;
+      waitpid(pid, &status, 0);
     }
 
     va_end(args);
@@ -90,8 +93,10 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
       int status = execv(command[0], command + 1);
       va_end(args);
       return status != -1;
-    default:
+    default: {
+      waitpid(kidpid, &status, 0);
       close(fd);
+    }
     }
     
 
