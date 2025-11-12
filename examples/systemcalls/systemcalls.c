@@ -46,27 +46,22 @@ bool do_exec(int count, ...)
     fflush(stdout);
     int pid = fork();
     if (!pid) {
-      puts("*** running ***");
-      for ( i = 0; i < count; ++i) {
-	puts(command[i]);
-      }
-      puts("****DONE****");
-      int status = execv(command[0], command + 1);
-      printf("Got %d\n", status);
-      puts("FAILED");
-      return false;
+      execv(command[0], command);
+      perror("fork+execv+waitpid");
     } else {
       int status;
       waitpid(pid, &status, 0);
-      printf("Got from child: %d\n", status);
+
       if (status == -1) {
-	puts("FAILURE ACK");
+	return false;
+      }
+
+      if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
 	return false;
       }
     }
 
     va_end(args);
-    puts("ALL GOOD!");
     return true;
 }
 
@@ -100,7 +95,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     switch (kidpid = fork()) {
     case -1: perror("fork"); abort();
     case 0:
-      if (dup2(fd, 1) < 0) { perror("dup2"); abort(); }
+      if (dup2(fd, STDOUT_FILENO) < 0) { perror("dup2"); abort(); }
       close(fd);
       execv(command[0], command);
       va_end(args);
