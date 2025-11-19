@@ -50,9 +50,13 @@ then
     sudo rm  -rf ${OUTDIR}/rootfs
 fi
 
-# TODO: Create necessary base directories
-
+mkdir -p "$OUTDIR"/rootfs
+cd "$OUTDIR"/rootfs
+mkdir -p bin sbin etc proc sys dev lib lib64 tmp usr var
+mkdir -p usr/bin usr/lib usr/sbin
+mkdir -p var/log
 cd "$OUTDIR"
+
 if [ ! -d "${OUTDIR}/busybox" ]
 then
 git clone git://busybox.net/busybox.git
