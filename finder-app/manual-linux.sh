@@ -52,7 +52,7 @@ then
 fi
 
 mkdir -p "$OUTDIR"/rootfs
-cp ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image.gz ${OUTDIR}/rootfs/zImage
+
 
 cd "$OUTDIR"/rootfs
 mkdir -p bin sbin etc proc sys dev lib lib64 tmp usr var home
@@ -80,6 +80,8 @@ echo "Library dependencies"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
+
+cp ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image.gz ${OUTDIR}/rootfs/zImage
 
 cp $(aarch64-none-linux-gnu-gcc --print-sysroot)/lib/ld-linux-aarch64.so.1 ${OUTDIR}/rootfs/lib
 cp $(aarch64-none-linux-gnu-gcc --print-sysroot)/lib64/libm.so.6 ${OUTDIR}/rootfs/lib64
