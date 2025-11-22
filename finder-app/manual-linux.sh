@@ -99,6 +99,7 @@ make CROSS_COMPILE=aarch64-none-linux-gnu-
 cp writer  ${OUTDIR}/rootfs/home
 cp autorun-qemu.sh  ${OUTDIR}/rootfs/home
 cp finder-test.sh  ${OUTDIR}/rootfs/home
+cp finder.sh  ${OUTDIR}/rootfs/home
 
 mkdir -p ${OUTDIR}/rootfs/home/conf
 cp -R ../conf/*  ${OUTDIR}/rootfs/home/conf
