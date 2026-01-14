@@ -1,9 +1,12 @@
-TARGET=writer
+CROSS_COMPILE ?=
+GCC ?= $(CROSS_COMPILE)gcc
 
-$(TARGET):
-	$(CROSS_COMPILE)gcc -owriter writer.c
+.PHONY: all
+all: writer
 
-all: $(TARGET)
+writer: writer.c
+	$(GCC) writer.c -o writer
 
+.PHONY: clean
 clean:
-	rm -rf $(TARGET)
+	rm -f writer *.o
