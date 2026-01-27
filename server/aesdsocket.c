@@ -8,6 +8,11 @@
 #include <stdio.h>
 #include <unistd.h>
 
+/**
+ * lifted from a game I wrote a couple of years ago. It kind of sucked tho.
+ * I had to modify it in a few spots and might reflect those improvements back into the game :)
+ * @return new socket, ready for accepting connections
+ */
 int createAcceptingSocket()
 {
     int sockfd, portno;
@@ -52,6 +57,7 @@ int createAcceptingSocket()
 
 int main(int argc, char** argv)
 {
+    FILE *output;
     int sock = createAcceptingSocket();
     socklen_t clilen;
     struct sockaddr_in cli_addr;
@@ -60,6 +66,22 @@ int main(int argc, char** argv)
     char ipstr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &cli_addr.sin_addr, ipstr, sizeof ipstr);
     printf("Accepted connection from %s\n", ipstr);
+    output = fopen("/var/tmp/aesdsocketdata", "w");
+    size_t bytesRead = 0;
+    do
+    {
+        char buffer[257];
+        memset(buffer, 0, 257);
+        bytesRead = recv(newsockfd, buffer, 256, 0);
+        puts(buffer);
+
+        fwrite(&buffer, bytesRead, 1, output);
+
+    } while (bytesRead > 0);
+
+    fclose(output);
+    close(newsockfd);
+    close(sock);
 
     return 0;
 }
