@@ -1,7 +1,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+#include <syslog.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -23,6 +23,7 @@ int createAcceptingSocket()
 
     if (sockfd < 0)
     {
+        syslog(LOG_ERR, "Could not create listening socket");
         return -1;
     }
 
@@ -40,6 +41,7 @@ int createAcceptingSocket()
 
     if (ret < 0)
     {
+        syslog(LOG_ERR, "Could not bind listening socket");
         close(sockfd);
         return -1;
     }
@@ -48,6 +50,7 @@ int createAcceptingSocket()
 
     if (ret < 0)
     {
+        syslog(LOG_ERR, "Could not listen on listening socket");
         close(sockfd);
         return -1;
     }
@@ -70,8 +73,8 @@ int main(int argc, char** argv)
     int newsockfd = accept(sock, (struct sockaddr*)&cli_addr, &clilen);
     char ipstr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &cli_addr.sin_addr, ipstr, sizeof ipstr);
-    printf("Accepted connection from %s\n", ipstr);
 
+    syslog(LOG_DEBUG, "Accepted connection from %s", ipstr);
 
     ssize_t bytesRead = 0;
     do {
@@ -101,6 +104,8 @@ int main(int argc, char** argv)
     while (offset < size) {
         offset += send(newsockfd, currentBuffer + offset, size - offset, 0);
     }
+
+    syslog(LOG_DEBUG, "Closed connection from %s", ipstr);
 
     /* clean up */
     free(currentBuffer);
