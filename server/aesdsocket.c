@@ -83,29 +83,28 @@ int main(int argc, char** argv)
             fwrite(&buffer, bytesRead, 1, output);
             buffer[0] = '\n';
             fwrite(&buffer, 1, 1, output);
-
-            /* fully read the existing data */
-            char *currentBuffer = NULL;
-            FILE* data = fopen("/var/tmp/aesdsocketdata", "r");
-            fseek(data, 0, SEEK_END);
-            size_t size = ftell(data) + 1;
-            currentBuffer = (char*)malloc(size);
-            rewind(data);
-            fread(currentBuffer, 1, size, data);
-            currentBuffer[size - 1] = 0;
-
-            /* send what we have back */
-            ssize_t offset = 0;
-            while (offset < size) {
-                offset += send(newsockfd, currentBuffer + offset, size - offset, 0);
-            }
-
-            /* clean up */
-            free(currentBuffer);
-            fclose(data);
         }
     } while (bytesRead > 0);
 
+    /* fully read the existing data */
+    char *currentBuffer = NULL;
+    FILE* data = fopen("/var/tmp/aesdsocketdata", "r");
+    fseek(data, 0, SEEK_END);
+    size_t size = ftell(data) + 1;
+    currentBuffer = (char*)malloc(size);
+    rewind(data);
+    fread(currentBuffer, 1, size, data);
+    currentBuffer[size - 1] = 0;
+
+    /* send what we have back */
+    ssize_t offset = 0;
+    while (offset < size) {
+        offset += send(newsockfd, currentBuffer + offset, size - offset, 0);
+    }
+
+    /* clean up */
+    free(currentBuffer);
+    fclose(data);
 
 
     /* clean up */
