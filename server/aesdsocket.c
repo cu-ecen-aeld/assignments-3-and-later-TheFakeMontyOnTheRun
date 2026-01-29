@@ -67,17 +67,22 @@ int main(int argc, char** argv)
     inet_ntop(AF_INET, &cli_addr.sin_addr, ipstr, sizeof ipstr);
     printf("Accepted connection from %s\n", ipstr);
     output = fopen("/var/tmp/aesdsocketdata", "w");
-    size_t bytesRead = 0;
-    do
-    {
+    ssize_t bytesRead = 0;
+    do {
         char buffer[257];
         memset(buffer, 0, 257);
-        bytesRead = recv(newsockfd, buffer, 256, 0);
-        puts(buffer);
-
-        fwrite(&buffer, bytesRead, 1, output);
-
+        bytesRead = recv(newsockfd, buffer, 256, MSG_DONTWAIT);
+        if (bytesRead > 0) {
+            printf("bytesRead = %d\n", bytesRead);
+            puts(buffer);
+            fwrite(&buffer, bytesRead, 1, output);
+            buffer[0] = '\n';
+            fwrite(&buffer, 1, 1, output);
+        }
     } while (bytesRead > 0);
+
+
+
 
     fclose(output);
     close(newsockfd);
