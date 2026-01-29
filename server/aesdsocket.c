@@ -33,6 +33,9 @@ int createAcceptingSocket()
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
 
+    int optval = 1;
+    setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+
     int ret = bind(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
 
     if (ret < 0)
