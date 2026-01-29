@@ -132,6 +132,7 @@ int main(int argc, char** argv)
     }
 
     /* clean up server */
+    unlink("/var/tmp/aesdsocketdata");
     fclose(output);
     close(sock);
 
