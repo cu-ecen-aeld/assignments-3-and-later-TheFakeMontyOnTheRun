@@ -1,9 +1,8 @@
-//#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-//#include <netinet/tcp.h>
 
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -34,7 +33,6 @@ int createAcceptingSocket()
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
 
-
     int ret = bind(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
 
     if (ret < 0)
@@ -57,7 +55,11 @@ int createAcceptingSocket()
 
 int main(int argc, char** argv)
 {
+    /* prepare the data repository */
     FILE *output;
+    output = fopen("/var/tmp/aesdsocketdata", "a+");
+
+    /* Accept incoming connections */
     int sock = createAcceptingSocket();
     socklen_t clilen;
     struct sockaddr_in cli_addr;
@@ -66,24 +68,44 @@ int main(int argc, char** argv)
     char ipstr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &cli_addr.sin_addr, ipstr, sizeof ipstr);
     printf("Accepted connection from %s\n", ipstr);
-    output = fopen("/var/tmp/aesdsocketdata", "w");
+
+
     ssize_t bytesRead = 0;
     do {
         char buffer[257];
         memset(buffer, 0, 257);
         bytesRead = recv(newsockfd, buffer, 256, MSG_DONTWAIT);
         if (bytesRead > 0) {
-            printf("bytesRead = %d\n", bytesRead);
-            puts(buffer);
+            /* append the received data */
             fwrite(&buffer, bytesRead, 1, output);
             buffer[0] = '\n';
             fwrite(&buffer, 1, 1, output);
+
+            /* fully read the existing data */
+            char *currentBuffer = NULL;
+            FILE* data = fopen("/var/tmp/aesdsocketdata", "r");
+            fseek(data, 0, SEEK_END);
+            size_t size = ftell(data) + 1;
+            currentBuffer = (char*)malloc(size);
+            rewind(data);
+            fread(currentBuffer, 1, size, data);
+            currentBuffer[size - 1] = 0;
+
+            /* send what we have back */
+            ssize_t offset = 0;
+            while (offset < size) {
+                offset += send(newsockfd, currentBuffer + offset, size - offset, 0);
+            }
+
+            /* clean up */
+            free(currentBuffer);
+            fclose(data);
         }
     } while (bytesRead > 0);
 
 
 
-
+    /* clean up */
     fclose(output);
     close(newsockfd);
     close(sock);
