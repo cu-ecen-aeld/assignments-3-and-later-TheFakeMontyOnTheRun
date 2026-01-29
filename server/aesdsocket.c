@@ -95,14 +95,12 @@ int main(int argc, char** argv)
 
         output = fopen("/var/tmp/aesdsocketdata", "a+");
         do {
-            char buffer[257];
-            memset(buffer, 0, 257);
+            char buffer[256];
+            memset(buffer, 0, 256);
             bytesRead = recv(newsockfd, buffer, 256, MSG_DONTWAIT);
             if (bytesRead > 0) {
                 /* append the received data */
-                fwrite(&buffer, bytesRead, 1, output);
-                buffer[0] = '\n';
-                fwrite(&buffer, 1, 1, output);
+                fwrite(&buffer, 1, bytesRead, output);
             }
         } while (bytesRead > 0);
         fclose(output);
@@ -111,11 +109,10 @@ int main(int argc, char** argv)
         char *currentBuffer = NULL;
         FILE* data = fopen("/var/tmp/aesdsocketdata", "r");
         fseek(data, 0, SEEK_END);
-        size_t size = ftell(data) + 1;
+        size_t size = ftell(data);
         currentBuffer = (char*)malloc(size);
         rewind(data);
         fread(currentBuffer, 1, size, data);
-        currentBuffer[size - 1] = 0;
 
         /* send what we have back */
         ssize_t offset = 0;
