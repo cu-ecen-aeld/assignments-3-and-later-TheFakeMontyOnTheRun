@@ -77,9 +77,7 @@ int main(int argc, char** argv)
     sigaction(SIGINT, &handler, NULL);
     sigaction(SIGTERM, &handler, NULL);
 
-    /* prepare the data repository */
     FILE *output;
-    output = fopen("/var/tmp/aesdsocketdata", "a+");
 
     /* Accept incoming connections */
     int sock = createAcceptingSocket();
@@ -93,8 +91,9 @@ int main(int argc, char** argv)
         inet_ntop(AF_INET, &cli_addr.sin_addr, ipstr, sizeof ipstr);
 
         syslog(LOG_DEBUG, "Accepted connection from %s", ipstr);
-
         ssize_t bytesRead = 0;
+
+        output = fopen("/var/tmp/aesdsocketdata", "a+");
         do {
             char buffer[257];
             memset(buffer, 0, 257);
@@ -106,6 +105,7 @@ int main(int argc, char** argv)
                 fwrite(&buffer, 1, 1, output);
             }
         } while (bytesRead > 0);
+        fclose(output);
 
         /* fully read the existing data */
         char *currentBuffer = NULL;
@@ -133,7 +133,6 @@ int main(int argc, char** argv)
 
     /* clean up server */
     unlink("/var/tmp/aesdsocketdata");
-    fclose(output);
     close(sock);
 
     return 0;
