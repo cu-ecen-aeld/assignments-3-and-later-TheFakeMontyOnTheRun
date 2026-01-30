@@ -104,6 +104,8 @@ int main(int argc, char** argv)
     if (runAsDaemon) {
         if (fork()) {
             return 0;
+        } else {
+            setsid();
         }
     }
 
