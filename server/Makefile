@@ -1,14 +1,12 @@
 CROSS_COMPILE ?=
 GCC ?= $(CROSS_COMPILE)gcc
 
-all: aesdsocket
-
-default: aesdsocket
-
 .PHONY: all
+all: aesdsocket
 
 aesdsocket: aesdsocket.c
 	$(GCC) aesdsocket.c -o aesdsocket
 
+.PHONY: clean
 clean:
-	rm aesdsocket
+	rm -f aesdsocket *.o
