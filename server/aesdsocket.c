@@ -26,6 +26,8 @@ int running = 1;
 /* are we runnning as daemon? */
 int runAsDaemon = 0;
 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 void handleSignals()
 {
     if (running)
@@ -80,6 +82,7 @@ void saveIncomingData(int newsockfd)
 {
     FILE* output;
     ssize_t bytesRead = 0;
+    pthread_mutex_lock(&mutex);
     output = fopen("/var/tmp/aesdsocketdata", "a+");
     do
     {
@@ -94,10 +97,12 @@ void saveIncomingData(int newsockfd)
     }
     while (bytesRead > 0);
     fclose(output);
+    pthread_mutex_unlock(&mutex);
 }
 
 char* fullyReadExistingData(size_t *size)
 {
+    pthread_mutex_lock(&mutex);
     FILE* data = fopen("/var/tmp/aesdsocketdata", "r");
     fseek(data, 0, SEEK_END);
     *size = ftell(data);
@@ -105,7 +110,7 @@ char* fullyReadExistingData(size_t *size)
     rewind(data);
     fread(currentBuffer, 1, *size, data);
     fclose(data);
-
+    pthread_mutex_unlock(&mutex);
     return currentBuffer;
 }
 
