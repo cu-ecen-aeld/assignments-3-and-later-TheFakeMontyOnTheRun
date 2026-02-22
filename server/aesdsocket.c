@@ -9,13 +9,15 @@
 #include <unistd.h>
 
 #include <pthread.h>
+#include "queue.h"
 
 struct thread_data
 {
     pthread_t id;
     int sockfd;
     char ipstr[INET_ADDRSTRLEN];
-
+    int complete;
+    SLIST_ENTRY(thread_data) node;
 };
 
 struct sigaction handler;
@@ -135,12 +137,17 @@ void* connectionHandler(void *thread_data)
     free(currentBuffer);
     close(data.sockfd);
     syslog(LOG_DEBUG, "Closed connection from %s", data.ipstr);
-    free(thread_data);
+    ((struct thread_data*)thread_data)->complete = 1;
+
     return NULL;
 }
 
 int main(int argc, char** argv)
 {
+
+    SLIST_HEAD(slisthead, thread_data) listHead;
+    SLIST_INIT(&listHead);
+
     /* Setup signal handler */
     handler.sa_handler = handleSignals;
     sigaction(SIGINT, &handler, NULL);
@@ -195,12 +202,39 @@ int main(int argc, char** argv)
         struct thread_data *data = calloc(1, sizeof(struct thread_data));
         data->sockfd = newsockfd;
         memcpy(&data->ipstr, ipstr, sizeof(ipstr));
-
+        SLIST_INSERT_HEAD(&listHead, data, node);
         pthread_create(&data->id, NULL, connectionHandler, data);
+
+        /* thread list maintenance */
+        struct thread_data *thread = NULL;
+        struct thread_data *tmp = NULL;
+        SLIST_FOREACH_SAFE(thread, &listHead, node, tmp) {
+            if (thread->complete) {
+                SLIST_REMOVE(&listHead, thread, thread_data, node);
+                pthread_join(thread->id, NULL);
+                free(thread);
+                break;
+            }
+        }
     }
 
-
     /* clean up server */
+
+    struct thread_data *thread = NULL;
+    while (!SLIST_EMPTY(&listHead))
+    {
+        thread = SLIST_FIRST(&listHead);
+        SLIST_REMOVE_HEAD(&listHead, node);
+
+        if (!thread->complete) {
+            close(thread->sockfd);
+        }
+
+        pthread_join(thread->id, NULL);
+
+        free(thread);
+    }
+
     unlink("/var/tmp/aesdsocketdata");
     close(sock);
 
