@@ -87,7 +87,7 @@ void saveIncomingData(int newsockfd)
     FILE* output;
     ssize_t bytesRead = 0;
     pthread_mutex_lock(&mutex);
-    output = fopen("/var/tmp/aesdsocketdata", "a+");
+    output = fopen("/var/tmp/aesdsocketdata", "a");
     do
     {
         char buffer[256];
@@ -100,6 +100,7 @@ void saveIncomingData(int newsockfd)
         }
     }
     while (bytesRead > 0);
+    fflush(output);
     fclose(output);
     pthread_mutex_unlock(&mutex);
 }
@@ -133,15 +134,17 @@ void* timestampHandler(void *thread_data) {
 
     const char *RFC2822 = "timestamp:%a, %d %b %Y %T %z\n";
     time_t now;
-    struct tm *current;
+    struct tm current;
     char timestamp[256];
 
     while (running) {
-
-        sleep(10);
+        for(int c = 0; c < 10 && running; c++)
+        {
+            sleep(1);
+        }
         now = time(NULL);
-        current = localtime(&now);
-        strftime(timestamp, sizeof(timestamp), RFC2822, current);
+        localtime_r(&now, &current);
+        strftime(timestamp, sizeof(timestamp), RFC2822, &current);
         saveTimestamp(timestamp);
     }
 
@@ -226,8 +229,7 @@ int main(int argc, char** argv)
     SLIST_INSERT_HEAD(&listHead, data, node);
     pthread_create(&data->id, NULL, timestampHandler, data);
 
-    while (running)
-    {
+    while (running)  {
         int newsockfd = accept(sock, (struct sockaddr*)&cli_addr, &clilen);
 
         char ipstr[INET_ADDRSTRLEN];
@@ -238,20 +240,8 @@ int main(int argc, char** argv)
         struct thread_data *data = calloc(1, sizeof(struct thread_data));
         data->sockfd = newsockfd;
         memcpy(&data->ipstr, ipstr, sizeof(ipstr));
-        SLIST_INSERT_HEAD(&listHead, data, node);
         pthread_create(&data->id, NULL, connectionHandler, data);
-
-        /* thread list maintenance */
-        struct thread_data *thread = NULL;
-        struct thread_data *tmp = NULL;
-        SLIST_FOREACH_SAFE(thread, &listHead, node, tmp) {
-            if (thread->complete) {
-                SLIST_REMOVE(&listHead, thread, thread_data, node);
-                pthread_join(thread->id, NULL);
-                free(thread);
-                break;
-            }
-        }
+        SLIST_INSERT_HEAD(&listHead, data, node);
     }
 
     /* clean up server */
@@ -261,15 +251,7 @@ int main(int argc, char** argv)
     {
         thread = SLIST_FIRST(&listHead);
         SLIST_REMOVE_HEAD(&listHead, node);
-
-        //should I?
-        if (!thread->complete && thread->sockfd != -1) {
-            pthread_kill(thread->id, SIGTERM);
-            close(thread->sockfd);
-        }
-
         pthread_join(thread->id, NULL);
-
         free(thread);
     }
 
