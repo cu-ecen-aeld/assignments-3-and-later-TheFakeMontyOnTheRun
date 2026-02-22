@@ -8,6 +8,16 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <pthread.h>
+
+struct thread_data
+{
+    pthread_t id;
+    int sockfd;
+    char ipstr[INET_ADDRSTRLEN];
+
+};
+
 struct sigaction handler;
 
 /* general flag for stopping and cleaning up */
@@ -99,9 +109,11 @@ char* fullyReadExistingData(size_t *size)
     return currentBuffer;
 }
 
-void connectionHandler(int newsockfd)
+void* connectionHandler(void *thread_data)
 {
-    saveIncomingData(newsockfd);
+    struct thread_data data = *((struct thread_data*)thread_data);
+
+    saveIncomingData(data.sockfd);
 
     /* fully read the existing data */
     size_t size;
@@ -111,11 +123,15 @@ void connectionHandler(int newsockfd)
     ssize_t offset = 0;
     while (offset < size)
     {
-        offset += send(newsockfd, currentBuffer + offset, size - offset, 0);
+        offset += send(data.sockfd, currentBuffer + offset, size - offset, 0);
     }
 
     /* clean up for this peer */
     free(currentBuffer);
+    close(data.sockfd);
+    syslog(LOG_DEBUG, "Closed connection from %s", data.ipstr);
+    free(thread_data);
+    return NULL;
 }
 
 int main(int argc, char** argv)
@@ -170,10 +186,12 @@ int main(int argc, char** argv)
 
         syslog(LOG_DEBUG, "Accepted connection from %s", ipstr);
 
-        connectionHandler(newsockfd);
+        /* very ugly hack */
+        struct thread_data *data = calloc(1, sizeof(struct thread_data));
+        data->sockfd = newsockfd;
+        memcpy(&data->ipstr, ipstr, sizeof(ipstr));
 
-        syslog(LOG_DEBUG, "Closed connection from %s", ipstr);
-        close(newsockfd);
+        pthread_create(&data->id, NULL, connectionHandler, data);
     }
 
 
