@@ -9,6 +9,8 @@
 #include <unistd.h>
 
 #include <pthread.h>
+#include <time.h>
+
 #include "queue.h"
 
 struct thread_data
@@ -102,6 +104,17 @@ void saveIncomingData(int newsockfd)
     pthread_mutex_unlock(&mutex);
 }
 
+void saveTimestamp(char *timestamp)
+{
+    FILE* output;
+    size_t len = strlen(timestamp);
+    pthread_mutex_lock(&mutex);
+    output = fopen("/var/tmp/aesdsocketdata", "a+");
+    fwrite(timestamp, len + 1, 1, output);
+    fclose(output);
+    pthread_mutex_unlock(&mutex);
+}
+
 char* fullyReadExistingData(size_t *size)
 {
     pthread_mutex_lock(&mutex);
@@ -116,8 +129,27 @@ char* fullyReadExistingData(size_t *size)
     return currentBuffer;
 }
 
-void* connectionHandler(void *thread_data)
-{
+void* timestampHandler(void *thread_data) {
+
+    const char *RFC2822 = "timestamp:%a, %d %b %Y %T %z\n";
+    time_t now;
+    struct tm *current;
+    char timestamp[256];
+
+    while (running) {
+
+        sleep(10);
+        now = time(NULL);
+        current = localtime(&now);
+        strftime(timestamp, sizeof(timestamp), RFC2822, current);
+        saveTimestamp(timestamp);
+    }
+
+    ((struct thread_data*)thread_data)->complete = 1;
+    return NULL;
+}
+
+void* connectionHandler(void *thread_data) {
     struct thread_data data = *((struct thread_data*)thread_data);
 
     saveIncomingData(data.sockfd);
@@ -189,6 +221,11 @@ int main(int argc, char** argv)
         }
     }
 
+    struct thread_data *data = calloc(1, sizeof(struct thread_data));
+    data->sockfd = -1; //so we won't close it later, during the cleanup
+    SLIST_INSERT_HEAD(&listHead, data, node);
+    pthread_create(&data->id, NULL, timestampHandler, data);
+
     while (running)
     {
         int newsockfd = accept(sock, (struct sockaddr*)&cli_addr, &clilen);
@@ -198,7 +235,6 @@ int main(int argc, char** argv)
 
         syslog(LOG_DEBUG, "Accepted connection from %s", ipstr);
 
-        /* very ugly hack */
         struct thread_data *data = calloc(1, sizeof(struct thread_data));
         data->sockfd = newsockfd;
         memcpy(&data->ipstr, ipstr, sizeof(ipstr));
@@ -226,7 +262,9 @@ int main(int argc, char** argv)
         thread = SLIST_FIRST(&listHead);
         SLIST_REMOVE_HEAD(&listHead, node);
 
-        if (!thread->complete) {
+        //should I?
+        if (!thread->complete && thread->sockfd != -1) {
+            pthread_kill(thread->id, SIGTERM);
             close(thread->sockfd);
         }
 
