@@ -66,6 +66,58 @@ int createAcceptingSocket()
     return sockfd;
 }
 
+void saveIncomingData(int newsockfd)
+{
+    FILE* output;
+    ssize_t bytesRead = 0;
+    output = fopen("/var/tmp/aesdsocketdata", "a+");
+    do
+    {
+        char buffer[256];
+        memset(buffer, 0, 256);
+        bytesRead = recv(newsockfd, buffer, 256, MSG_DONTWAIT);
+        if (bytesRead > 0)
+        {
+            /* append the received data */
+            fwrite(&buffer, 1, bytesRead, output);
+        }
+    }
+    while (bytesRead > 0);
+    fclose(output);
+}
+
+char* fullyReadExistingData(size_t *size)
+{
+    FILE* data = fopen("/var/tmp/aesdsocketdata", "r");
+    fseek(data, 0, SEEK_END);
+    *size = ftell(data);
+    char* currentBuffer = (char*)malloc(*size);
+    rewind(data);
+    fread(currentBuffer, 1, *size, data);
+    fclose(data);
+
+    return currentBuffer;
+}
+
+void connectionHandler(int newsockfd)
+{
+    saveIncomingData(newsockfd);
+
+    /* fully read the existing data */
+    size_t size;
+    char* currentBuffer = fullyReadExistingData(&size);
+
+    /* send what we have back */
+    ssize_t offset = 0;
+    while (offset < size)
+    {
+        offset += send(newsockfd, currentBuffer + offset, size - offset, 0);
+    }
+
+    /* clean up for this peer */
+    free(currentBuffer);
+}
+
 int main(int argc, char** argv)
 {
     /* Setup signal handler */
@@ -77,8 +129,6 @@ int main(int argc, char** argv)
     {
         runAsDaemon = 1;
     }
-
-    FILE* output;
 
     /* Accept incoming connections */
     int sock = createAcceptingSocket();
@@ -103,8 +153,10 @@ int main(int argc, char** argv)
 
     if (runAsDaemon) {
         if (fork()) {
+            /* am I the root process? (that is, I got a PID from the fork call) */
             return 0;
         } else {
+            /* I'm the child process - let's roll. */
             setsid();
         }
     }
@@ -112,48 +164,15 @@ int main(int argc, char** argv)
     while (running)
     {
         int newsockfd = accept(sock, (struct sockaddr*)&cli_addr, &clilen);
+
         char ipstr[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &cli_addr.sin_addr, ipstr, sizeof ipstr);
 
         syslog(LOG_DEBUG, "Accepted connection from %s", ipstr);
-        ssize_t bytesRead = 0;
 
-        output = fopen("/var/tmp/aesdsocketdata", "a+");
-        do
-        {
-            char buffer[256];
-            memset(buffer, 0, 256);
-            bytesRead = recv(newsockfd, buffer, 256, MSG_DONTWAIT);
-            if (bytesRead > 0)
-            {
-                /* append the received data */
-                fwrite(&buffer, 1, bytesRead, output);
-            }
-        }
-        while (bytesRead > 0);
-        fclose(output);
-
-        /* fully read the existing data */
-        char* currentBuffer = NULL;
-        FILE* data = fopen("/var/tmp/aesdsocketdata", "r");
-        fseek(data, 0, SEEK_END);
-        size_t size = ftell(data);
-        currentBuffer = (char*)malloc(size);
-        rewind(data);
-        fread(currentBuffer, 1, size, data);
-
-        /* send what we have back */
-        ssize_t offset = 0;
-        while (offset < size)
-        {
-            offset += send(newsockfd, currentBuffer + offset, size - offset, 0);
-        }
+        connectionHandler(newsockfd);
 
         syslog(LOG_DEBUG, "Closed connection from %s", ipstr);
-
-        /* clean up for this peer */
-        free(currentBuffer);
-        fclose(data);
         close(newsockfd);
     }
 
