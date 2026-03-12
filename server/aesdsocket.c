@@ -32,7 +32,7 @@ int runAsDaemon = 0;
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
-void handleSignals()
+void handleSignals(int signo)
 {
     if (running)
     {
@@ -96,7 +96,7 @@ void saveIncomingData(int newsockfd)
         if (bytesRead > 0)
         {
             /* append the received data */
-            fwrite(&buffer, 1, bytesRead, output);
+            fwrite(&buffer[0], 1, bytesRead, output);
         }
     }
     while (bytesRead > 0);
@@ -111,7 +111,7 @@ void saveTimestamp(char *timestamp)
     size_t len = strlen(timestamp);
     pthread_mutex_lock(&mutex);
     output = fopen("/var/tmp/aesdsocketdata", "a+");
-    fwrite(timestamp, len + 1, 1, output);
+    fwrite(timestamp, 1, len, output);
     fclose(output);
     pthread_mutex_unlock(&mutex);
 }
@@ -122,7 +122,7 @@ char* fullyReadExistingData(size_t *size)
     FILE* data = fopen("/var/tmp/aesdsocketdata", "r");
     fseek(data, 0, SEEK_END);
     *size = ftell(data);
-    char* currentBuffer = (char*)malloc(*size);
+    char* currentBuffer = (char*)calloc(1, *size + 1);
     rewind(data);
     fread(currentBuffer, 1, *size, data);
     fclose(data);
@@ -153,9 +153,9 @@ void* timestampHandler(void *thread_data) {
 }
 
 void* connectionHandler(void *thread_data) {
-    struct thread_data data = *((struct thread_data*)thread_data);
+    struct thread_data *data = ((struct thread_data*)thread_data);
 
-    saveIncomingData(data.sockfd);
+    saveIncomingData(data->sockfd);
 
     /* fully read the existing data */
     size_t size;
@@ -165,14 +165,14 @@ void* connectionHandler(void *thread_data) {
     ssize_t offset = 0;
     while (offset < size)
     {
-        offset += send(data.sockfd, currentBuffer + offset, size - offset, 0);
+        offset += send(data->sockfd, currentBuffer + offset, size - offset, 0);
     }
 
     /* clean up for this peer */
     free(currentBuffer);
-    close(data.sockfd);
-    syslog(LOG_DEBUG, "Closed connection from %s", data.ipstr);
-    ((struct thread_data*)thread_data)->complete = 1;
+    close(data->sockfd);
+    syslog(LOG_DEBUG, "Closed connection from %s", data->ipstr);
+    data->complete = 1;
 
     return NULL;
 }
@@ -184,6 +184,7 @@ int main(int argc, char** argv)
     SLIST_INIT(&listHead);
 
     /* Setup signal handler */
+    memset(&handler, 0, sizeof(struct sigaction));
     handler.sa_handler = handleSignals;
     sigaction(SIGINT, &handler, NULL);
     sigaction(SIGTERM, &handler, NULL);
@@ -220,6 +221,10 @@ int main(int argc, char** argv)
             return 0;
         } else {
             /* I'm the child process - let's roll. */
+            chdir("/");
+            close(STDIN_FILENO);
+            close(STDOUT_FILENO);
+            close(STDERR_FILENO);
             setsid();
         }
     }
@@ -239,7 +244,7 @@ int main(int argc, char** argv)
 
         struct thread_data *data = calloc(1, sizeof(struct thread_data));
         data->sockfd = newsockfd;
-        memcpy(&data->ipstr, ipstr, sizeof(ipstr));
+        memcpy(data->ipstr, ipstr, sizeof(ipstr));
         pthread_create(&data->id, NULL, connectionHandler, data);
         SLIST_INSERT_HEAD(&listHead, data, node);
     }
